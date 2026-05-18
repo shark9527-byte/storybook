@@ -135,8 +135,10 @@ class _ReaderScreenState extends State<ReaderScreen> {
     return tokens;
   }
 
+  static const _punctuation = r''' ，。！？；：、（）""''《》-,.!?;:()[]{}<>''';
+
   bool _isPunctuation(String char) {
-    return RegExp(r'^[\s，。！？；：、（）""''《》\-,.!?;:()\[\]{}<>]+$').hasMatch(char);
+    return char.trim().isEmpty || _punctuation.contains(char);
   }
 
   @override
