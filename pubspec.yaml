@@ -15,7 +15,7 @@ dependencies:
   image_picker: ^1.1.2
   flutter_tts: ^4.2.1
   file_picker: ^8.1.6
-  native_pdf_renderer: ^7.0.1
+  pdfx: ^2.9.2
 
 dev_dependencies:
   flutter_test:

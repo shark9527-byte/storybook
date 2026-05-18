@@ -1,10 +1,10 @@
 import 'dart:io';
-import 'package:native_pdf_renderer/native_pdf_renderer.dart';
+import 'package:pdfx/pdfx.dart';
 
 class ImportService {
   Future<ImportResult> importPdf(String pdfPath, String outputDir) async {
     final document = await PdfDocument.openFile(pdfPath);
-    final pageCount = document.pagesCount;
+    final pageCount = await document.pagesCount;
     final title = pdfPath.split('/').last.replaceAll('.pdf', '');
     final paths = <String>[];
 
@@ -13,9 +13,11 @@ class ImportService {
       final image = await page.render(
         width: page.width,
         height: page.height,
+        format: PdfPageImageFormat.png,
       );
       final imagePath = '$outputDir/page_${i}_${DateTime.now().millisecondsSinceEpoch}.png';
-      await image.saveAs(imagePath);
+      final file = File(imagePath);
+      await file.writeAsBytes(image.bytes);
       paths.add(imagePath);
       page.close();
     }
