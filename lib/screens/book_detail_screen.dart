@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/book.dart';
@@ -100,21 +101,62 @@ class _PageTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: Colors.orange.shade100,
-          child: Text('${page.pageNumber}', style: const TextStyle(fontWeight: FontWeight.bold)),
-        ),
-        title: Text(page.text.isEmpty ? '(无文字)' : page.text,
-            maxLines: 2, overflow: TextOverflow.ellipsis),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(icon: const Icon(Icons.edit, size: 20), onPressed: onEdit),
-            IconButton(icon: const Icon(Icons.delete, size: 20, color: Colors.red), onPressed: onDelete),
-          ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      child: Card(
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        child: SizedBox(
+          height: 80,
+          child: Row(
+            children: [
+              SizedBox(
+                width: 80,
+                height: 80,
+                child: Image.file(
+                  File(page.imagePath),
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                    color: Colors.orange.shade100,
+                    child: Center(
+                      child: Text('${page.pageNumber}',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              Container(
+                width: 3,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('第 ${page.pageNumber} 页',
+                          style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                      const SizedBox(height: 2),
+                      Text(page.text.isEmpty ? '(无文字)' : page.text,
+                          maxLines: 2, overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 15)),
+                    ],
+                  ),
+                ),
+              ),
+              IconButton(icon: const Icon(Icons.edit, size: 20), onPressed: onEdit),
+              IconButton(
+                  icon: const Icon(Icons.delete, size: 20, color: Colors.red), onPressed: onDelete),
+              const SizedBox(width: 4),
+            ],
+          ),
         ),
       ),
     );

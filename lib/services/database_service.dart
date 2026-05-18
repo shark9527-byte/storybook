@@ -18,7 +18,7 @@ class DatabaseService {
   Future<Database> _initDB() async {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, 'storybook.db');
-    return openDatabase(path, version: 1, onCreate: _onCreate);
+    return openDatabase(path, version: 2, onCreate: _onCreate, onUpgrade: _onUpgrade);
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -27,7 +27,8 @@ class DatabaseService {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         title TEXT NOT NULL,
         coverImagePath TEXT NOT NULL,
-        createdAt TEXT NOT NULL
+        createdAt TEXT NOT NULL,
+        lastPageNumber INTEGER NOT NULL DEFAULT 0
       )
     ''');
     await db.execute('''
@@ -40,6 +41,12 @@ class DatabaseService {
         FOREIGN KEY (bookId) REFERENCES books(id) ON DELETE CASCADE
       )
     ''');
+  }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute('ALTER TABLE books ADD COLUMN lastPageNumber INTEGER NOT NULL DEFAULT 0');
+    }
   }
 
   // === Book CRUD ===
@@ -58,6 +65,12 @@ class DatabaseService {
   Future<int> updateBook(Book book) async {
     final db = await database;
     return db.update('books', book.toMap(), where: 'id = ?', whereArgs: [book.id]);
+  }
+
+  Future<void> saveProgress(int bookId, int pageNumber) async {
+    final db = await database;
+    await db.update('books', {'lastPageNumber': pageNumber},
+        where: 'id = ?', whereArgs: [bookId]);
   }
 
   Future<int> deleteBook(int bookId) async {

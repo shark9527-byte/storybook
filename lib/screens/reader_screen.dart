@@ -20,14 +20,19 @@ class _ReaderScreenState extends State<ReaderScreen> {
   final FlutterTts _tts = FlutterTts();
   int _currentPage = 0;
   bool _isPlaying = false;
+  bool _autoPlay = false;
   double _speechRate = 0.5;
   List<m.StoryPage> _pages = [];
+  int? _highlightedCharIndex;
 
   @override
   void initState() {
     super.initState();
-    _pageController = PageController();
     _pages = context.read<BookProvider>().getPagesForBook(widget.book.id!);
+    final lastPage = widget.book.lastPageNumber;
+    final initialPage = lastPage > 0 && lastPage <= _pages.length ? lastPage - 1 : 0;
+    _currentPage = initialPage;
+    _pageController = PageController(initialPage: initialPage);
     _initTTS();
   }
 
@@ -41,8 +46,17 @@ class _ReaderScreenState extends State<ReaderScreen> {
       if (mounted) setState(() => _isPlaying = true);
     });
     _tts.setCompletionHandler(() {
-      if (mounted) {
-        setState(() => _isPlaying = false);
+      if (!mounted) return;
+      setState(() => _isPlaying = false);
+      if (_autoPlay && _currentPage < _pages.length - 1) {
+        _nextPage();
+        Future.delayed(const Duration(milliseconds: 600), () {
+          if (mounted && _autoPlay) {
+            final text = _pages[_currentPage].text;
+            if (text.isNotEmpty) _speak(text);
+          }
+        });
+      } else {
         _nextPage();
       }
     });
@@ -55,6 +69,13 @@ class _ReaderScreenState extends State<ReaderScreen> {
     if (text.isEmpty) return;
     if (_isPlaying) await _tts.stop();
     await _tts.speak(text);
+  }
+
+  Future<void> _speakChar(String char) async {
+    if (char.trim().isEmpty) return;
+    await _tts.stop();
+    setState(() => _isPlaying = false);
+    await _tts.speak(char);
   }
 
   Future<void> _togglePlay() async {
@@ -96,6 +117,28 @@ class _ReaderScreenState extends State<ReaderScreen> {
     }
   }
 
+  void _onCharTap(int index, String char) {
+    setState(() => _highlightedCharIndex = index);
+    _speakChar(char);
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (mounted) setState(() => _highlightedCharIndex = null);
+    });
+  }
+
+  List<String> _tokenize(String text) {
+    // 一-鿿 = 中文逐字 | [a-zA-Z]+ = 英文单词 | . = 其他逐符
+    final tokens = <String>[];
+    final regex = RegExp(r'[一-鿿]|[a-zA-Z]+|.');
+    for (final match in regex.allMatches(text)) {
+      tokens.add(match.group(0)!);
+    }
+    return tokens;
+  }
+
+  bool _isPunctuation(String char) {
+    return RegExp(r'^[\s，。！？；：、（）""''《》\-,.!?;:()\[\]{}<>]+$').hasMatch(char);
+  }
+
   @override
   void dispose() {
     _tts.stop();
@@ -123,19 +166,21 @@ class _ReaderScreenState extends State<ReaderScreen> {
       ),
       body: Column(
         children: [
-          // 绘本页面
           Expanded(
             child: PageView.builder(
               controller: _pageController,
               itemCount: _pages.length,
               onPageChanged: (i) {
-                setState(() => _currentPage = i);
+                setState(() {
+                  _currentPage = i;
+                  _highlightedCharIndex = null;
+                });
                 _stop();
+                context.read<BookProvider>().saveProgress(widget.book.id!, i + 1);
               },
               itemBuilder: (_, i) => _buildPage(_pages[i]),
             ),
           ),
-          // 控制栏
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
@@ -147,7 +192,6 @@ class _ReaderScreenState extends State<ReaderScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // 进度条
                   Slider(
                     value: _speechRate,
                     min: 0.0,
@@ -167,7 +211,6 @@ class _ReaderScreenState extends State<ReaderScreen> {
                     ],
                   ),
                   const SizedBox(height: 4),
-                  // 播放控制
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
@@ -188,6 +231,12 @@ class _ReaderScreenState extends State<ReaderScreen> {
                         icon: const Icon(Icons.skip_next, size: 36),
                         onPressed: _currentPage < _pages.length - 1 ? _nextPage : null,
                       ),
+                      IconButton(
+                        icon: Icon(Icons.autorenew, size: 32,
+                            color: _autoPlay ? Theme.of(context).colorScheme.primary : Colors.grey),
+                        tooltip: _autoPlay ? '关闭自动翻页' : '开启自动翻页',
+                        onPressed: () => setState(() => _autoPlay = !_autoPlay),
+                      ),
                     ],
                   ),
                 ],
@@ -206,28 +255,80 @@ class _ReaderScreenState extends State<ReaderScreen> {
         elevation: 4,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         clipBehavior: Clip.antiAlias,
-        child: Column(
-          children: [
-            Expanded(
-              flex: 3,
-              child: Image.file(File(page.imagePath), fit: BoxFit.cover, width: double.infinity),
-            ),
-            Expanded(
-              flex: 1,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                color: Colors.white,
-                child: SingleChildScrollView(
-                  child: Text(
-                    page.text.isEmpty ? '(无文字)' : page.text,
-                    style: const TextStyle(fontSize: 18, height: 1.6),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isWide = constraints.maxWidth > 600;
+            final image = InteractiveViewer(
+              minScale: 1.0,
+              maxScale: 3.0,
+              child: Image.file(File(page.imagePath), fit: BoxFit.cover),
+            );
+            if (isWide) {
+              return Row(
+                children: [
+                  Expanded(child: image),
+                  SizedBox(
+                    width: constraints.maxWidth * 0.4,
+                    child: Container(
+                      padding: const EdgeInsets.all(20),
+                      color: Colors.white,
+                      child: SingleChildScrollView(
+                        child: _buildTappableText(page.text),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            }
+            return Column(
+              children: [
+                Expanded(flex: 3, child: image),
+                Expanded(
+                  flex: 1,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    color: Colors.white,
+                    child: SingleChildScrollView(
+                      child: _buildTappableText(page.text),
+                    ),
                   ),
                 ),
-              ),
-            ),
-          ],
+              ],
+            );
+          },
         ),
+      ),
+    );
+  }
+
+  Widget _buildTappableText(String text) {
+    if (text.isEmpty) {
+      return const Text('(无文字)', style: TextStyle(fontSize: 18, color: Colors.grey));
+    }
+
+    final tokens = _tokenize(text);
+    return Text.rich(
+      TextSpan(
+        style: const TextStyle(fontSize: 22, height: 1.8, color: Colors.black87),
+        children: List.generate(tokens.length, (i) {
+          final token = tokens[i];
+          final isHighlighted = _highlightedCharIndex == i;
+          final isPunct = _isPunctuation(token);
+
+          return TextSpan(
+            text: token,
+            style: TextStyle(
+              color: isHighlighted ? Colors.orange : (isPunct ? Colors.grey : Colors.black87),
+              backgroundColor: isHighlighted ? Colors.orange.withOpacity(0.2) : Colors.transparent,
+              fontWeight: isHighlighted ? FontWeight.bold : FontWeight.normal,
+            ),
+            recognizer: isPunct
+                ? null
+                : (TapGestureRecognizer()
+                  ..onTap = () => _onCharTap(i, token)),
+          );
+        }),
       ),
     );
   }

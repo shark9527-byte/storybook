@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../providers/book_provider.dart';
@@ -17,9 +18,23 @@ class PageEditorScreen extends StatefulWidget {
 
 class _PageEditorScreenState extends State<PageEditorScreen> {
   final _textController = TextEditingController();
+  final FlutterTts _tts = FlutterTts();
   String? _imagePath;
   final _picker = ImagePicker();
   bool _saving = false;
+  bool _isPreviewing = false;
+
+  Future<void> _preview() async {
+    final text = _textController.text.trim();
+    if (text.isEmpty) return;
+    setState(() => _isPreviewing = true);
+    await _tts.setLanguage('zh-CN');
+    await _tts.setSpeechRate(0.5);
+    await _tts.speak(text);
+    _tts.setCompletionHandler(() {
+      if (mounted) setState(() => _isPreviewing = false);
+    });
+  }
 
   bool get _isEditing => widget.page != null;
 
@@ -59,6 +74,7 @@ class _PageEditorScreenState extends State<PageEditorScreen> {
 
   @override
   void dispose() {
+    _tts.stop();
     _textController.dispose();
     super.dispose();
   }
@@ -97,10 +113,16 @@ class _PageEditorScreenState extends State<PageEditorScreen> {
             const SizedBox(height: 24),
             TextField(
               controller: _textController,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: '页面文字（朗读内容）',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.text_fields),
+                border: const OutlineInputBorder(),
+                prefixIcon: const Icon(Icons.text_fields),
+                suffixIcon: IconButton(
+                  icon: Icon(_isPreviewing ? Icons.volume_up : Icons.volume_up_outlined),
+                  color: _isPreviewing ? Theme.of(context).colorScheme.primary : null,
+                  tooltip: '试听',
+                  onPressed: _preview,
+                ),
                 alignLabelWithHint: true,
               ),
               maxLines: 5,
