@@ -15,6 +15,10 @@ class ImportService {
         height: page.height,
         format: PdfPageImageFormat.png,
       );
+      if (image == null) {
+        page.close();
+        continue;
+      }
       final imagePath = '$outputDir/page_${i}_${DateTime.now().millisecondsSinceEpoch}.png';
       final file = File(imagePath);
       await file.writeAsBytes(image.bytes);
