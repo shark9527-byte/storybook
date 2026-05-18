@@ -1,15 +1,9 @@
-name: Build iOS IPA
+name: Build iOS IPA (Unsigned)
 
 on:
   push:
     branches: [main, master]
   workflow_dispatch:
-    inputs:
-      export_method:
-        description: '导出方式'
-        type: choice
-        options: [ad-hoc, development]
-        default: ad-hoc
 
 jobs:
   build:
@@ -25,7 +19,6 @@ jobs:
           channel: 'stable'
           cache: true
 
-      # 本地没有 ios/ 目录，让 CI 自动生成
       - name: Generate iOS platform
         run: flutter create . --platforms=ios
 
@@ -37,61 +30,18 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      # ============================================
-      # 代码签名（需要 Apple Developer 账号）
-      # 在 GitHub Settings → Secrets 中添加以下 4 个密钥：
-      #   BUILD_CERTIFICATE_BASE64  = base64 编码的 .p12 证书
-      #   P12_PASSWORD              = 证书密码
-      #   BUILD_PROVISION_PROFILE_BASE64 = base64 编码的 .mobileprovision
-      #   KEYCHAIN_PASSWORD         = 临时 keychain 密码（随便设）
-      # ============================================
-      - name: Setup code signing
-        id: signing
-        if: env.BUILD_CERTIFICATE_BASE64 != ''
-        env:
-          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
-          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
-          BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}
-          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-        run: |
-          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
-          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-          echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o $RUNNER_TEMP/certificate.p12
-          security import $RUNNER_TEMP/certificate.p12 -k $KEYCHAIN_PATH -P "$P12_PASSWORD" -A -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-          security list-keychain -d user -s $KEYCHAIN_PATH
-          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          echo -n "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode -o ~/Library/MobileDevice/Provisioning\ Profiles/profile.mobileprovision
+      - name: Build unsigned iOS app
+        run: flutter build ios --release --no-codesign
 
-      # 有签名 → 出 IPA（可装真机）
-      - name: Build signed IPA
-        if: steps.signing.outcome == 'success'
+      - name: Package unsigned IPA
         run: |
-          flutter build ipa \
-            --release \
-            --export-method=${{ github.event.inputs.export_method || 'ad-hoc' }} \
-            --build-number=${{ github.run_number }}
+          mkdir -p Payload
+          cp -r build/ios/iphoneos/Runner.app Payload/
+          zip -r storybook.ipa Payload/
 
-      # 无签名 → 出 Simulator App（只能模拟器跑）
-      - name: Build unsigned for simulator
-        if: steps.signing.outcome != 'success'
-        run: |
-          flutter build ios --release --no-codesign
-
-      - name: Upload IPA (signed)
-        if: steps.signing.outcome == 'success'
+      - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: storybook-ipa-${{ github.run_number }}
-          path: build/ios/ipa/*.ipa
+          name: storybook-unsigned-ipa-${{ github.run_number }}
+          path: storybook.ipa
           retention-days: 30
-
-      - name: Upload Simulator App (unsigned)
-        if: steps.signing.outcome != 'success'
-        uses: actions/upload-artifact@v4
-        with:
-          name: storybook-simulator-${{ github.run_number }}
-          path: build/ios/iphoneos/Runner.app
-          retention-days: 7
