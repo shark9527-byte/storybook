@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(flutter --version)",
-      "WebSearch"
+      "WebSearch",
+      "WebFetch(domain:pub.dev)"
     ]
   }
 }

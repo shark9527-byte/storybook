@@ -109,11 +109,12 @@ class BookProvider extends ChangeNotifier {
 
     for (int i = 0; i < result.pageImagePaths.length; i++) {
       onProgress(i + 1, result.pageImagePaths.length);
+      final text = i < result.pageTexts.length ? result.pageTexts[i] : '';
       final page = StoryPage(
         bookId: bookId,
         pageNumber: i + 1,
         imagePath: result.pageImagePaths[i],
-        text: '',
+        text: text,
       );
       final pageId = await _db.insertPage(page);
       _pagesCache[bookId] ??= [];

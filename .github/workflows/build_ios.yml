@@ -27,6 +27,12 @@ jobs:
           /usr/libexec/PlistBuddy -c "Add :NSCameraUsageDescription string '用于拍摄绘本图片'" ios/Runner/Info.plist
           /usr/libexec/PlistBuddy -c "Add :NSPhotoLibraryUsageDescription string '用于选择绘本图片'" ios/Runner/Info.plist
 
+      - name: Configure iOS for ML Kit (Chinese OCR)
+        run: |
+          sed -i '' 's/IPHONEOS_DEPLOYMENT_TARGET = [0-9.]*/IPHONEOS_DEPLOYMENT_TARGET = 15.5;/g' ios/Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/platform :ios, .*/platform :ios, '\''15.5'\''/' ios/Podfile
+          echo "pod 'GoogleMLKit/TextRecognitionChinese'" >> ios/Podfile
+
       - name: Install dependencies
         run: flutter pub get
 

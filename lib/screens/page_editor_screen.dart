@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../providers/book_provider.dart';
@@ -23,6 +24,8 @@ class _PageEditorScreenState extends State<PageEditorScreen> {
   final _picker = ImagePicker();
   bool _saving = false;
   bool _isPreviewing = false;
+  bool _isRecognizing = false;
+  final _textRecognizer = TextRecognizer(script: TextRecognitionScript.chinese);
 
   Future<void> _preview() async {
     final text = _textController.text.trim();
@@ -49,9 +52,24 @@ class _PageEditorScreenState extends State<PageEditorScreen> {
 
   Future<void> _pickImage(ImageSource source) async {
     final xfile = await _picker.pickImage(source: source, maxWidth: 1024);
-    if (xfile != null) {
-      setState(() => _imagePath = xfile.path);
+    if (xfile == null) return;
+
+    setState(() {
+      _imagePath = xfile.path;
+      _isRecognizing = true;
+    });
+
+    try {
+      final inputImage = InputImage.fromFilePath(xfile.path);
+      final recognized = await _textRecognizer.processImage(inputImage);
+      if (recognized.text.isNotEmpty && _imagePath == xfile.path) {
+        _textController.text = recognized.text;
+      }
+    } catch (_) {
+      // OCR 失败不阻塞流程
     }
+
+    if (mounted) setState(() => _isRecognizing = false);
   }
 
   Future<void> _save() async {
@@ -75,6 +93,7 @@ class _PageEditorScreenState extends State<PageEditorScreen> {
   @override
   void dispose() {
     _tts.stop();
+    _textRecognizer.close();
     _textController.dispose();
     super.dispose();
   }
@@ -116,7 +135,12 @@ class _PageEditorScreenState extends State<PageEditorScreen> {
               decoration: InputDecoration(
                 labelText: '页面文字（朗读内容）',
                 border: const OutlineInputBorder(),
-                prefixIcon: const Icon(Icons.text_fields),
+                prefixIcon: _isRecognizing
+                    ? const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                      )
+                    : const Icon(Icons.text_fields),
                 suffixIcon: IconButton(
                   icon: Icon(_isPreviewing ? Icons.volume_up : Icons.volume_up_outlined),
                   color: _isPreviewing ? Theme.of(context).colorScheme.primary : null,
