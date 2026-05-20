@@ -22,6 +22,11 @@ jobs:
       - name: Generate iOS platform
         run: flutter create . --platforms=ios
 
+      - name: Set iOS platform version
+        run: |
+          sed -i '' 's/# platform :ios, .*/platform :ios, '\''15.5'\''/' ios/Podfile
+          grep -q 'platform :ios' ios/Podfile || echo "platform :ios, '15.5'" >> ios/Podfile
+
       - name: Install dependencies
         run: flutter pub get
 
